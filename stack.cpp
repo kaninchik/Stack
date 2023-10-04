@@ -3,68 +3,59 @@
 #include<cstdlib>
 #include<cstdint>
 
-#include"consts.h"
 #include"stack.h"
 #include"security.h"
+#include"kernel_func.h"
+#include"dump.h"
 
 
-int Stack_ctor(my_stack *stk, const char *name, int line, const char *file, const char *func)
+int Stack_ctor(my_stack *stk)
 {
+    if(stk == NULL)
+        return STACK_IS_NULL;
+
     stk->size_stack = 0;
-    stk->capacity = 3;
-    stk->name = name;
-    stk->line = line;
-    stk->file = file;
-    stk->func = func;
+    stk->capacity = INITIAL_CAPACITY;
 
-    #ifdef DEBUG
+    #ifdef STK_PROTECT
 
-    stk->left_canary = CANARY;
+    stk->left_stk_canary = STK_CANARY;
+    stk->right_stk_canary = STK_CANARY;
 
-
-    stk->right_canary = CANARY;
-
-    stk->data = (Elem_t* )((char *)calloc(stk->capacity*sizeof(Elem_t) + 2*sizeof(Canary_t), 1));
-
-    if(stk->data == NULL)
-    {
-        return stk->status |= ERROR_WITH_ARRAY;
-
-        STACK_DUMP(stk);
-    }
-
-    stk->data = (Elem_t *)((char *)stk->data + sizeof(Canary_t));
-
-    ((Canary_t *)(stk->data))[-1] = CANARY;
-
-    ((Elem_t *)(stk->data))[stk->capacity] = CANARY;
+    stk->data = (Elem_t* )calloc(stk->capacity*sizeof(Elem_t) + 2*sizeof(Canary_t), 1);
 
     #else
 
     stk->data = (Elem_t* )calloc(stk->capacity, sizeof(Elem_t));
 
+    #endif
+
     if(stk->data == NULL)
     {
-        return stk->status |= ERROR_WITH_ARRAY;
+        stk->status |= STK_DATA_IS_NULL;
+        STACK_DUMP_IF_ERROR(stk);
 
-        STACK_DUMP(stk);
+        return stk->status;
     }
+
+    #ifdef STK_PROTECT
+
+    stk->data = (Elem_t *)((char *)stk->data + sizeof(Canary_t));
+
+    ((Canary_t *)stk->data)[-1] = STK_CANARY;
+    *(Canary_t *)((Elem_t *)stk->data + stk->capacity) = STK_CANARY;
 
     #endif
 
-    Fill_stack(stk);
+    Fill_poison(stk);
 
-    #ifdef DEBUG
+    #ifdef STK_PROTECT
 
     Stack_hash(stk);
 
     #endif
 
-    Stack_Ok(stk);
-
-    STACK_DUMP(stk);
-
-    return stk->status |= NO_ERRORS;
+    return stk->status;
 
 }
 
@@ -78,7 +69,7 @@ void Stack_dtor(my_stack *stk)
     stk->func = NULL;
     stk->line = 0;
 
-    #ifdef DEBUG
+    #ifdef STK_PROTECT
 
     free((char *)stk->data - sizeof(Canary_t));
 
@@ -87,152 +78,66 @@ void Stack_dtor(my_stack *stk)
     free(stk->data);
 
     #endif
-
-    free(stk);
 }
 
 int Stack_push(my_stack *stk, Elem_t value)
 {
-    #ifdef DEBUG
-
-    if(!Check_hash(stk))
+    if(Stack_check(stk) != NO_ERRORS)
     {
-        stk->status |= ERROR_WITH_HASH;
-        STACK_DUMP(stk);
+        STACK_DUMP_IF_ERROR(stk);
+
+        return stk->status;
     }
 
-    #endif
-
-    if(stk->size_stack + 1 >= stk->capacity)
-        Stack_realloc(stk, ADD);
+    Stack_realloc(stk);
 
     stk->data[stk->size_stack] = value;
 
     stk->size_stack++;
 
-    Fill_stack(stk);
+    Fill_poison(stk);
 
-    #ifdef DEBUG
+    #ifdef STK_PROTECT
 
     Stack_hash(stk);
 
     #endif
 
-    Stack_Ok(stk);
-
-    STACK_DUMP(stk);
-
-    return stk->status |= NO_ERRORS;
+    return stk->status;
 
 }
 
-int Stack_pop(my_stack *stk, int *x)
+int Stack_pop(my_stack *stk, Elem_t *x)
 {
-    #ifdef DEBUG
+    if(x == NULL)
+        return VALUE_POINTER_IS_NULL;
 
-    if(!Check_hash(stk))
+    if(Stack_check(stk) != NO_ERRORS)
     {
-        stk->status |= ERROR_WITH_HASH;
-        STACK_DUMP(stk);
+        STACK_DUMP_IF_ERROR(stk);
+
+        return stk->status;
     }
 
-    #endif
-
-    *x = *(stk->data + stk->size_stack - 1);
-
-    if(stk->size_stack - 1 < stk->capacity/2 && stk->capacity > 4)
-        Stack_realloc(stk, REDUCE);
-
+    *x = stk->data[stk->size_stack - 1];
     stk->size_stack--;
 
-    Fill_stack(stk);
+    Stack_realloc(stk);
 
-    #ifdef DEBUG
+    Fill_poison(stk);
+
+    #ifdef STK_PROTECT
 
     Stack_hash(stk);
 
     #endif
 
-    Stack_Ok(stk);
-
-    STACK_DUMP(stk);
-
-    return stk->status |= NO_ERRORS;
+    return stk->status;
 }
 
-int Fill_stack(my_stack *stk)
-{
-    for(int i = stk->size_stack; i < stk->capacity; i++)
-        *(stk->data + i) = POISON;
 
-    return stk->status |= NO_ERRORS;
 
-    Stack_Ok(stk);
 
-    STACK_DUMP(stk);
-}
 
-int Stack_realloc(my_stack *stk, For_realloc change_capacity)
-{
-    #ifdef DEBUG
 
-    Canary_t tmp = ((Elem_t *)(stk->data))[stk->capacity];
-
-    #endif
-
-    if(change_capacity == REDUCE)
-    {
-        #ifdef DEBUG
-
-        stk->data = (Elem_t *)realloc((char *)stk->data - sizeof(Canary_t), stk->capacity/2 * sizeof(Elem_t) + 2*sizeof(Canary_t));
-
-        #else
-
-        stk->data = (Elem_t *)realloc(stk->data, stk->capacity/2 * sizeof(Elem_t));
-
-        #endif
-
-        if(stk->data == NULL)
-        {
-            return stk->status |= ERROR_WITH_ARRAY;
-
-            STACK_DUMP(stk);
-        }
-
-        stk->capacity = stk->capacity/2;
-    }
-
-    if(change_capacity == ADD)
-    {
-        #ifdef DEBUG
-
-        stk->data = (Elem_t *)realloc((char *)stk->data - sizeof(Canary_t), 2*stk->capacity*sizeof(Elem_t) + 2*sizeof(Canary_t));
-
-        #else
-
-        stk->data = (Elem_t *)realloc(stk->data, 2*stk->capacity*sizeof(Elem_t));
-
-        #endif
-
-        if(stk->data == NULL)
-        {
-            return stk->status |= ERROR_WITH_ARRAY;
-
-            STACK_DUMP(stk);
-        }
-
-        stk->capacity = 2*stk->capacity;
-
-    }
-
-    #ifdef DEBUG
-
-    stk->data = (Elem_t *)((char *)stk->data + sizeof(Canary_t));
-
-    ((Elem_t *)(stk->data))[stk->capacity] = tmp;
-
-    #endif
-
-    return stk->status |= NO_ERRORS;
-}
 

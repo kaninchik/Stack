@@ -3,132 +3,48 @@
 #include<cstdlib>
 #include<cstdint>
 
-#include"consts.h"
 #include"stack.h"
 #include"security.h"
+#include"kernel_func.h"
+#include"dump.h"
 
 
-int Stack_dump(my_stack *stk, const char *name, int line, const char *file, const char *func)
+int Stack_check(my_stack *stk)
 {
-    if(stk->status != 0)
-    {
-        stk->name = name;
-        stk->line = line;
-        stk->file = file;
-        stk->func = func;
-
-        puts(stk->file);
-
-        printf("function:\n");
-
-        puts(stk->func);
-
-        printf("line = %d;\n"
-               "size = %d;\n"
-               "capacity = %d;\n"
-               "data[%p]:\n"
-               "code of error = %d\n", (stk->line), stk->size_stack, stk->capacity, stk->data, stk->status);
-
-        #ifdef DEBUG
-
-        printf("%p [%d] = %lu\n", (Canary_t *)(stk->data) - 1, -1, *((Canary_t *)(stk->data) - 1));
-
-        #endif
-
-        for(int i = 0; i < stk->capacity; i++)
-            printf("%p [%d] = %d\n", (stk->data + i), i, *(stk->data + i));
-
-        for(int i = 1; i <= 128; i = i << 1)
-        {
-            if((stk->status & i) != 0)
-            {
-                switch(stk->status & i)
-                {
-                    case ERROR_WITH_ARRAY:
-
-                        printf("The pointer to the array is NULL\n");
-                        Stack_dtor(stk);
-                        break;
-
-                    case ERROR_WITH_STACK:
-
-                        printf("The pointer to the stack is NULL\n");
-                        Stack_dtor(stk);
-                        break;
-
-                    case ERROR_WITH_CAPACITY:
-
-                        printf("The capacity of your stack is a negative number: %d\n", stk->capacity);
-                        break;
-
-                    case ERROR_WITH_SIZE:
-
-                        printf("You are on a non_existent element: %d\n", stk->size_stack);
-                        break;
-
-                    #ifdef DEBUG
-
-                    case CANARY_STK_DEAD:
-
-                        printf("The canaries guarding the stack were killed\n");
-                        break;
-
-                    case CANARY_ARR_DEAD:
-
-                        printf("The canaries guarding the array were killed\n");
-                        break;
-
-                    case ERROR_WITH_HASH:
-                        printf("Hash doesn't match");
-                        break;
-
-                    #endif
-                }
-            }
-        }
-
-        stk->status = NO_ERRORS;
-    }
-
-
-    if(stk->status == 0)
-    {
-        for(int i = 0; i < stk->size_stack; i++)
-            printf("%p [%d] = %d\n", (stk->data + i), i, *(stk->data + i));
-
-        printf("\n");
-    }
-
-
-    return stk->status = NO_ERRORS;
-}
-
-
-int Stack_Ok(my_stack *stk)
-{
-
     if(stk == NULL)
-        return stk->status |= ERROR_WITH_STACK;
+    {
+        stk->status = STACK_IS_NULL;
+        return stk->status;
+    }
 
     if(stk->data == NULL)
-        return stk->status |= ERROR_WITH_ARRAY;
+    {
+        stk->status = STK_DATA_IS_NULL;
+        return stk->status;
+    }
 
     if(stk->capacity < 0)
-        stk->status |= ERROR_WITH_CAPACITY;
+        stk->status |= CAPACITY_LESS_THAN_ZERO;
 
-    if(stk->size_stack < 0 || stk->capacity < stk->size_stack)
-        stk->status |= ERROR_WITH_SIZE;
+    if(stk->size_stack < 0)
+        stk->status |= SIZE_LESS_THAN_ZERO;
 
-    #ifdef DEBUG
+    if(stk->capacity < stk->size_stack)
+        stk->status |= SIZE_BIGGER_THAN_CAPACITY;
 
-    if(stk->left_canary != CANARY || stk->right_canary != CANARY)
-        stk->status |= CANARY_STK_DEAD;
+    #ifdef STK_PROTECT
 
-    if(((Elem_t *)(stk->data))[stk->capacity] != CANARY || ((Canary_t *)(stk->data))[-1] != CANARY)
-        stk->status |= CANARY_ARR_DEAD;
+    if(stk->left_stk_canary != STK_CANARY || stk->left_stk_canary != STK_CANARY)
+        stk->status |= STK_CANARY_DESTROYED;
+
+    if(*(Canary_t *)((Elem_t *)(stk->data) + stk->capacity) != STK_CANARY
+        || ((Canary_t *)(stk->data))[-1] != STK_CANARY)
+    {
+        stk->status |= ARR_CANARY_DESTROYED;
+    }
 
     if(!Check_hash(stk))
-        stk->status |= ERROR_WITH_HASH;
+        stk->status |= STK_HASH_DESTROYED;
 
     #endif
 
@@ -136,35 +52,36 @@ int Stack_Ok(my_stack *stk)
 
 }
 
-
-#ifdef DEBUG
+#ifdef STK_PROTECT
 int Stack_hash(my_stack *stk)
 {
+    assert(stk != NULL);
+    assert(stk->data != NULL);
+
     stk->hash = 5381;
 
     for(size_t i = 0; i < sizeof(my_stack); i++)
         stk->hash = ((stk->hash >> 5) + stk->hash) + *((char *)stk + i);
 
-    for(int i = -1; i <= stk->capacity; i++)
+    for(int i = -sizeof(Canary_t); i <= stk->capacity; i++)
         stk->hash = ((stk->hash >> 5) + stk->hash) + *((char *)stk->data + i);
 
-    return stk->status |= NO_ERRORS;
+    return stk->status;
 
 }
 
 
-int Check_hash(my_stack *stk)
+bool Check_hash(my_stack *stk)
 {
-    uint64_t tmp = stk->hash;
+    assert(stk != NULL);
+    assert(stk->data != NULL);
+
+    uint64_t prev_hash = stk->hash;
 
     stk->hash = 0;
 
     Stack_hash(stk);
 
-    if(tmp == stk->hash)
-        return 1;
-    else
-        return 0;
+    return prev_hash == stk->hash;
 }
-
 #endif

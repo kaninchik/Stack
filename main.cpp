@@ -3,31 +3,14 @@
 #include<cstdlib>
 #include<cstdint>
 
-#include"consts.h"
 #include"stack.h"
 #include"security.h"
+#include"kernel_func.h"
+#include"dump.h"
 
 int main()
 {
-    my_stack stk;
-
-    STACK_CTOR(&stk);
-
-    int a = 0;
-
-    Stack_push(&stk, 10);
-
-    Stack_push(&stk, 10);
-
-    Stack_push(&stk, 10);
-
-    Stack_push(&stk, 10);
-
-    Stack_pop(&stk, &a);
-
-    Stack_pop(&stk, &a);
-
-    Stack_dtor(&stk);
+    my_stack stk = {};
 
     return 0;
 
