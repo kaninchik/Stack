@@ -6,6 +6,7 @@
 #ifdef STK_PROTECT
 
 typedef uint64_t Canary_t;
+typedef int Elem_t;
 
 const Canary_t STK_CANARY = 123456789;
 const int INITIAL_CAPACITY = 3;
@@ -21,12 +22,11 @@ enum Errors
     SIZE_LESS_THAN_ZERO = 1 << 3,
     SIZE_BIGGER_THAN_CAPACITY = 1 << 4,
     STK_CANARY_DESTROYED = 1 << 5,
-    ARR_CANARY_DESTROYED = 1 << 6,
+    STK_DATA_CANARY_DESTROYED = 1 << 6,
     STK_HASH_DESTROYED = 1 << 7,
-    VALUE_POINTER_IS_NULL = 1 << 8
+    VALUE_POINTER_IS_NULL = 1 << 8,
+    ENUM_POINTER_IS_NULL = 1 << 9
 };
-
-typedef int Elem_t;
 
 struct my_stack
 {

@@ -40,7 +40,7 @@ int Stack_check(my_stack *stk)
     if(*(Canary_t *)((Elem_t *)(stk->data) + stk->capacity) != STK_CANARY
         || ((Canary_t *)(stk->data))[-1] != STK_CANARY)
     {
-        stk->status |= ARR_CANARY_DESTROYED;
+        stk->status |= STK_DATA_CANARY_DESTROYED;
     }
 
     if(!Check_hash(stk))
@@ -74,7 +74,6 @@ int Stack_hash(my_stack *stk)
 bool Check_hash(my_stack *stk)
 {
     assert(stk != NULL);
-    assert(stk->data != NULL);
 
     uint64_t prev_hash = stk->hash;
 

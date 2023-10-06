@@ -12,7 +12,11 @@
 int Stack_ctor(my_stack *stk)
 {
     if(stk == NULL)
+    {
+        STACK_DUMP_IF_ERROR(stk);
+
         return STACK_IS_NULL;
+    }
 
     stk->size_stack = 0;
     stk->capacity = INITIAL_CAPACITY;
@@ -110,7 +114,14 @@ int Stack_push(my_stack *stk, Elem_t value)
 int Stack_pop(my_stack *stk, Elem_t *x)
 {
     if(x == NULL)
-        return VALUE_POINTER_IS_NULL;
+    {
+        stk->status = VALUE_POINTER_IS_NULL;
+
+        STACK_DUMP_IF_ERROR(stk);
+
+        return stk->status;
+    }
+
 
     if(Stack_check(stk) != NO_ERRORS)
     {

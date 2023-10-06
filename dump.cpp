@@ -8,8 +8,13 @@
 #include"kernel_func.h"
 #include"dump.h"
 
+
 int Stack_dump(my_stack *stk, const char *name, int line, const char *file, const char *func)
 {
+    printf("stack[%p]\n", stk);
+
+    if(stk == NULL)
+        return STACK_IS_NULL;
 
     stk->name = name;
     stk->line = line;
@@ -22,7 +27,6 @@ int Stack_dump(my_stack *stk, const char *name, int line, const char *file, cons
 
     puts(stk->func);
 
-    printf("stack[%p]\n", stk);
     printf("line = %d\n", stk->line);
     printf("size = %d\n", stk->size_stack);
     printf("capacity = %d\n", stk->capacity);
@@ -41,9 +45,9 @@ int Stack_dump(my_stack *stk, const char *name, int line, const char *file, cons
     #endif
 
     for(int i = 0; i < stk->capacity; i++)
-        printf("%p [%d] = " SPEC_CANARY_T "\n", (stk->data + i), i, stk->data[i]);
+        printf("%p [%d] = " SPEC_ELEM_T "\n", (stk->data + i), i, stk->data[i]);
 
-    for(int i = 1; i <= 256; i = i << 1)
+    for(int i = 1; i <= 512; i = i << 1)
     {
         switch(stk->status & i)
         {
@@ -76,14 +80,24 @@ int Stack_dump(my_stack *stk, const char *name, int line, const char *file, cons
                 printf("You have gone off the stack");
                 break;
 
-            #ifdef PROTECT
+            case VALUE_POINTER_IS_NULL:
+
+                printf("You have passed a null pointer to the stack_pop function");
+                break;
+
+            case ENUM_POINTER_IS_NULL:
+
+                printf("You have passed a null pointer to the change_capacity_if_need function");
+                break;
+
+            #ifdef STK_PROTECT
 
             case STK_CANARY_DESTROYED:
 
                 printf("The canaries guarding the stack were killed\n");
                 break;
 
-            case ARR_CANARY_DESTROYED:
+            case STK_DATA_CANARY_DESTROYED:
 
                 printf("The canaries guarding the array were killed\n");
                 break;

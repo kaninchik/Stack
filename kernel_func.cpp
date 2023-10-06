@@ -72,7 +72,13 @@ int Stack_realloc(my_stack *stk)
 int Change_capacity_if_need(my_stack *stk, Resize *mode)
 {
     if(mode == NULL)
-        return VALUE_POINTER_IS_NULL;
+    {
+        stk->status = ENUM_POINTER_IS_NULL;
+
+        STACK_DUMP_IF_ERROR(stk);
+
+        return stk->status;
+    }
 
     if(stk->size_stack + 1 >= stk->capacity)
     {
